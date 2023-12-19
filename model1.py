@@ -1,42 +1,58 @@
+import tensorflow as tf
+import tensorflow.datasets as tfds
+import tensorflow.recommenders as tfrs
 import pandas as pd
-import numpy as np
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.layers import Input, Embedding, Dot, Flatten
-from tensorflow.keras.models import Model
-from tensorflow.keras.optimizers import Adam
+from sklearn.preprocessing import LabelEncoder
 
-# Membaca data dari file CSV
-df = pd.read_csv('data_rating.csv')  # Gantilah 'nama_file.csv' dengan nama file CSV Anda
+# Load your data
+data = pd.read_csv('data_rating.csv')
 
-# Encoding user_id dan product
-df['user_id'] = df['user_id'].astype("category").cat.codes
-df['product'] = df['product'].astype("category").cat.codes
+# Encode the user_id and product columns to create unique integer indices
+user_encoder = LabelEncoder()
+product_encoder = LabelEncoder()
 
-# Membagi data menjadi data latihan dan data pengujian
-train_data, test_data = train_test_split(df, test_size=0.2, random_state=42)
+data['user_id'] = user_encoder.fit_transform(data['user_id'])
+data['product'] = product_encoder.fit_transform(data['product'])
 
-# Jumlah unik user dan product
-num_users = len(df['user_id'].unique())
-num_products = len(df['product'].unique())
+# Split the data into a train and test set
+train, test = train_test_split(data, test_size=0.2)
 
-# Membuat model collaborative filtering sederhana
-user_input = Input(shape=(1,))
-product_input = Input(shape=(1,))
+# Convert the pandas dataframe to a tensorflow dataset
+train = tf.data.Dataset.from_tensor_slices(dict(train))
+test = tf.data.Dataset.from_tensor_slices(dict(test))
 
-user_embedding = Embedding(num_users, 10)(user_input)
-product_embedding = Embedding(num_products, 10)(product_input)
+# Build flexible representation models.
+user_model = tf.keras.Sequential([
+  tf.keras.layers.experimental.preprocessing.StringLookup(
+    vocabulary=unique_user_ids, mask_token=None),
+  tf.keras.layers.Embedding(len(unique_user_ids) + 1, embedding_dimension)
+])
+product_model = tf.keras.Sequential([
+  tf.keras.layers.experimental.preprocessing.StringLookup(
+    vocabulary=unique_product_titles, mask_token=None),
+  tf.keras.layers.Embedding(len(unique_product_titles) + 1, embedding_dimension)
+])
 
-user_flat = Flatten()(user_embedding)
-product_flat = Flatten()(product_embedding)
+# Define your objectives.
+task = tfrs.tasks.Retrieval(metrics=tfrs.metrics.FactorizedTopK(
+    train.batch(128).map(product_model)
+  )
+)
 
-dot_product = Dot(axes=1)([user_flat, product_flat])
+# Create a retrieval model.
+model = tfrs.Model(user_model, product_model, task)
+model.compile(optimizer=tf.keras.optimizers.Adagrad(0.5))
 
-model = Model(inputs=[user_input, product_input], outputs=dot_product)
-model.compile(optimizer=Adam(learning_rate=0.001), loss='mean_squared_error')
+# Train.
+model.fit(train.batch(4096), validation_data=test.batch(4096), epochs=3)
 
-# Melatih model
-model.fit([train_data['user_id'], train_data['product']], train_data['rating'], epochs=100, validation_split=0.2)
+# Set up retrieval using trained representations.
+index = tfrs.layers.ann.BruteForce(model.user_model)
+index.index_from_dataset(
+  tf.data.Dataset.zip((train.map(lambda x: x["product"]), train.batch(100).map(model.product_model)))
+)
 
-# Evaluasi model
-result = model.evaluate([test_data['user_id'], test_data['product']], test_data['rating'])
-print(f'Loss on test data: {result}')
+# Get recommendations.
+_, titles = index(np.array([42]))
+print(f"Recommendations for user 42: {titles[0, :3]}")

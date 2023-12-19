@@ -21,4 +21,4 @@ df = pd.DataFrame({'user_id': user_ids, 'product': products, 'rating': ratings})
 
 # Tampilkan DataFrame
 print(df)
-df.to_csv('data_rating.csv', index=False)
+df.to_csv('data_rating3.csv', index=False)
