@@ -12,7 +12,7 @@ user_ids_existing = [
 ]
 # Buat data dummy dengan user_id yang sudah ada
 np.random.seed(42)  # Untuk hasil yang konsisten
-user_ids = np.repeat(user_ids_existing, 10)
+user_ids = np.repeat(user_ids_existing, 1000)
 products = np.random.choice(['ayam', 'itik', 'kerbau', 'sapi', 'kuda', 'unggas lainnya', 'kelinci', 'domba', 'kambing'], size=len(user_ids))
 ratings = np.random.randint(2, 6, size=len(user_ids))
 
