@@ -33,7 +33,8 @@ def create_model(num_users, num_products, embedding_size=50):
     concat = Concatenate()([user_flat, product_flat])
     dense1 = Dense(512, activation='relu')(concat)
     dense2 = Dense(256, activation='relu')(dense1)
-    output = Dense(1)(dense2)
+    dense3 = Dense(128, activation='relu')(dense2)
+    output = Dense(1)(dense3)
 
     model = Model(inputs=[user_input, product_input], outputs=output)
     model.compile(loss='mean_squared_error', optimizer=Adam(learning_rate=0.001))
@@ -45,10 +46,12 @@ num_products = data['product'].nunique()
 
 # Create and train the model
 model = create_model(num_users, num_products)
-model.fit([train['user_id'], train['product']], train['rating'], epochs=20, batch_size=64, validation_split=0.2)
+model.fit([train['user_id'], train['product']], train['rating'], epochs=50, batch_size=32, validation_split=0.2)
 
 # Evaluate the model on the test set
 result = model.evaluate([test['user_id'], test['product']], test['rating'])
 print(f"Test Loss: {result}")
 
 model.save("recommendation_model.h5")
+
+
